@@ -1,46 +1,20 @@
 name: CI Pipeline
 
-on:
-  push:
-    branches: [ main ]
+on: push
 
 jobs:
   project-testing:
     runs-on: ubuntu-latest
 
-    env:
-      # MLflow / DagsHub
-      MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-      MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
-      MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-
-      # AWS
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
-  
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-
-
     steps:
-
-      # 1️⃣ Checkout Repository
-      - name: Checkout code
+      - name: checkout code
         uses: actions/checkout@v3
 
-      # 2️⃣ Setup Python
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: setup python
+        uses: actions/setup-python@v2
         with:
           python-version: '3.10'
 
-      # 3️⃣ Install system dependencies (IMPORTANT for nltk + dvc + docker)
-      - name: Install system packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential python3-dev
-
-      # 4️⃣ Cache pip
       - name: Cache pip dependencies
         uses: actions/cache@v3
         with:
@@ -49,105 +23,73 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      # 5️⃣ Install requirements
-      - name: Install dependencies
+      - name: install dependencies
         run: |
-          pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 6️⃣ Configure AWS (needed for DVC S3 remote)
-      - name: Configure AWS credentials
-        run: |
-          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws configure set region ${{ secrets.AWS_REGION }}
-
-      # 7️⃣ Pull dataset from DVC remote (S3)
-      - name: DVC Pull
+      - name: run pipeline
         env:
-          ML_PROJECT: ${{ secrets.ML_PROJECT }}
-        run: |
-          dvc pull
-
-      # 8️⃣ Run full ML pipeline
-      - name: Run DVC Pipeline
-        env:
-          ML_PROJECT: ${{ secrets.ML_PROJECT }}
           CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
         run: |
           dvc repro
 
-      # 9️⃣ Run model unit tests
       - name: Run model tests
         env:
-          ML_PROJECT: ${{ secrets.ML_PROJECT }}
+          CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
         run: |
           python -m unittest tests/test_model.py
 
-      # 🔟 Promote model to production (MLflow)
-      - name: Promote model
+      - name: Promote model to production
         if: success()
         env:
-          ML_PROJECT: ${{ secrets.ML_PROJECT }}
-        run: |
-          python scripts/promote_model.py
+          CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
+        run: python scripts/promote_model.py
 
-      # 11️⃣ Test Flask app
-      - name: Run Flask tests
+      - name: Run Flask app tests
         if: success()
         env:
-          ML_PROJECT: ${{ secrets.ML_PROJECT }}
-        run: |
-          python -m unittest tests/test_flask_app.py
+          CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
+        run: python -m unittest tests/test_flask_app.py
 
-      # 12️⃣ Login to AWS ECR
       - name: Login to AWS ECR
         if: success()
         run: |
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
-          | docker login --username AWS --password-stdin \
-          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+            aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws configure set region ${{ secrets.AWS_REGION }}
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
 
-      # 13️⃣ Build Docker image
       - name: Build Docker image
-        if: success()
         run: |
-          docker build -t ${{ secrets.ECR_REPOSITORY }}:latest .
+            docker build -t ${{ secrets.ECR_REPOSITORY }}:latest .
 
-      # 14️⃣ Tag Docker image
       - name: Tag Docker image
-        if: success()
         run: |
-          docker tag ${{ secrets.ECR_REPOSITORY }}:latest \
-          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest
+            docker tag ${{ secrets.ECR_REPOSITORY }}:latest \
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest
 
-      # 15️⃣ Push to ECR
+    
+      - name: Check Docker Authentication
+        run: docker info
+
       - name: Push Docker image to ECR
-        if: success()
         run: |
-          docker push \
-          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest
 
-      # 16️⃣ Setup kubectl
-      - name: Set up kubectl
+      - name: Set Up kubectl
         uses: azure/setup-kubectl@v3
         with:
           version: 'latest'
-
-      # 17️⃣ Connect to EKS
+      
       - name: Update kubeconfig
         run: |
-          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name flask-app-cluster
+          aws eks update-kubeconfig --region us-east-1 --name flask-app-cluster
 
-      # 18️⃣ Create Kubernetes secret (VERY IMPORTANT)
       - name: Create Kubernetes Secret
         run: |
-          kubectl create secret generic mlflow-secret \
-            --from-literal=ML_PROJECT=${{ secrets.ML_PROJECT }} \
-            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic capstone-secret \
+            --from-literal=CAPSTONE_TEST=${{ secrets.CAPSTONE_TEST }} --dry-run=client -o yaml | kubectl apply -f -
 
-      # 19️⃣ Deploy application
       - name: Deploy to EKS
         run: |
           kubectl apply -f deployment.yaml
-
