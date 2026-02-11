@@ -8,6 +8,9 @@ on:
 jobs:
   build-test-and-deploy:
     runs-on: ubuntu-latest
+    env:  # ✅ Job-level environment
+      PYTHONPATH: ${{ github.workspace }}
+      CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
 
     steps:
       # -------------------------------
@@ -45,12 +48,9 @@ jobs:
           pip install dvc
 
       # -------------------------------
-      # Run DVC Pipeline (FIXED)
+      # Run DVC Pipeline
       # -------------------------------
       - name: Run DVC pipeline
-        env:
-          CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "Running DVC with PYTHONPATH=$PYTHONPATH"
           dvc repro
@@ -59,8 +59,6 @@ jobs:
       # Run Model Tests
       # -------------------------------
       - name: Run model tests
-        env:
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           python -m unittest tests/test_model.py
 
@@ -68,8 +66,6 @@ jobs:
       # Promote Model
       # -------------------------------
       - name: Promote model to production
-        env:
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           python scripts/promote_model.py
 
@@ -77,8 +73,6 @@ jobs:
       # Run Flask App Tests
       # -------------------------------
       - name: Run Flask app tests
-        env:
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           python -m unittest tests/test_flask_app.py
 
@@ -119,6 +113,7 @@ jobs:
       - name: Push Docker image to Amazon ECR
         run: |
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest
+
 
 
 
