@@ -14,7 +14,7 @@ jobs:
 
     steps:
       # -------------------------------
-      # Checkout Code
+      # Checkout code
       # -------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
             ${{ runner.os }}-pip-
 
       # -------------------------------
-      # Install Dependencies
+      # Install dependencies
       # -------------------------------
       - name: Install dependencies
         run: |
@@ -48,7 +48,7 @@ jobs:
           pip install dvc
 
       # -------------------------------
-      # Run DVC Pipeline
+      # Run DVC pipeline
       # -------------------------------
       - name: Run DVC pipeline
         run: |
@@ -101,29 +101,35 @@ jobs:
           docker build -t capstone-app:latest .
 
       # -------------------------------
-      # Verify Docker Image Exists
+      # Verify Docker Image
       # -------------------------------
-      - name: Verify Docker image
+      - name: Verify Docker image exists
         run: docker image inspect capstone-app:latest
 
       # -------------------------------
-      # Tag & Push Docker Image to ECR
+      # Tag Docker Image for ECR
       # -------------------------------
-      - name: Tag & Push Docker image
+      - name: Tag Docker image for ECR
         env:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}  # capstone-proj
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}  # should be capstone-proj
           IMAGE_TAG: latest
         run: |
-          set -e
-          echo "Verifying local Docker image exists..."
-          docker image inspect capstone-app:$IMAGE_TAG
-
-          echo "Tagging Docker image for ECR..."
+          echo "Tagging Docker image..."
           docker tag capstone-app:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
+      # -------------------------------
+      # Push Docker Image to ECR
+      # -------------------------------
+      - name: Push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: latest
+        run: |
           echo "Pushing Docker image to ECR..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
 
 
 
