@@ -90,33 +90,29 @@ jobs:
       # Login to Amazon ECR
       # -------------------------------
       - name: Login to Amazon ECR
+        id: login-ecr          # ← IMPORTANT: add this id
         uses: aws-actions/amazon-ecr-login@v2
 
       # -------------------------------
-      # Build Docker Image
+      # Build & Push Docker Image to ECR
       # -------------------------------
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ secrets.ECR_REPOSITORY }}:latest .
-
-      # -------------------------------
-      # Tag Docker Image
-      # -------------------------------
-      
-      # -------------------------------
-      # Tag & Push Docker Image
-      # -------------------------------
-      - name: Tag and Push Docker image
+      - name: Build and push Docker image to ECR
         env:
-          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}   # ← uses the safe output
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}           # should be e.g. capstone-app or capstone-proj
           IMAGE_TAG: latest
         run: |
-          echo "Tagging Docker image..."
-          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          
+          # Debug: show what we're actually building/pushing
+          echo "ECR full image name: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          echo "Building Docker image..."
+
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+
           echo "Pushing Docker image to ECR..."
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          # Optional: show local images to verify
+          docker images | grep $ECR_REPOSITORY
 
 
 
