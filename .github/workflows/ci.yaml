@@ -103,19 +103,20 @@ jobs:
       # Tag Docker Image
       # -------------------------------
       
-      - name: Tag & Push Docker Image
+      # -------------------------------
+      # Tag & Push Docker Image
+      # -------------------------------
+      - name: Tag and Push Docker image
+        env:
+          ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: latest
         run: |
-          # Define full ECR image URI
-          IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest"
-
-      
-
-
           echo "Tagging Docker image..."
-          docker tag ${{ secrets.ECR_REPOSITORY }}:latest $IMAGE_URI
-
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          
           echo "Pushing Docker image to ECR..."
-          docker push $IMAGE_URI
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
 
 
