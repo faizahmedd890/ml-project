@@ -6,124 +6,116 @@ on:
       - main
 
 jobs:
-  project-testing:
+  build-test-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}
+      CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
 
     steps:
       # -------------------------------
-      # Checkout code
+      # Checkout Code
       # -------------------------------
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # -------------------------------
       # Setup Python
       # -------------------------------
       - name: Setup Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
       # -------------------------------
       # Cache pip dependencies
       # -------------------------------
       - name: Cache pip
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('flask_app/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
       # -------------------------------
-      # Install dependencies
+      # Install Dependencies
       # -------------------------------
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r flask_app/requirements.txt
+          pip install dvc
 
       # -------------------------------
-      # Run pipeline
+      # Run DVC Pipeline
       # -------------------------------
       - name: Run DVC pipeline
-        env:
-          CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
-        run: dvc repro
+        run: |
+          echo "Running DVC with PYTHONPATH=$PYTHONPATH"
+          dvc repro
 
       # -------------------------------
-      # Run model tests
+      # Run Model Tests
       # -------------------------------
       - name: Run model tests
-        env:
-          CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
-        run: python -m unittest tests/test_model.py
+        run: |
+          python -m unittest tests/test_model.py
 
       # -------------------------------
-      # Promote model
+      # Promote Model
       # -------------------------------
       - name: Promote model to production
-        if: success()
-        env:
-          CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
-        run: python scripts/promote_model.py
+        run: |
+          python scripts/promote_model.py
 
       # -------------------------------
-      # Run Flask app tests
+      # Run Flask App Tests
       # -------------------------------
       - name: Run Flask app tests
-        if: success()
-        env:
-          CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
-        run: python -m unittest tests/test_flask_app.py
-
-      # -------------------------------
-      # Login to AWS ECR
-      # -------------------------------
-      - name: Login to AWS ECR
-        if: success()
         run: |
-          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ] || [ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ] || [ -z "${{ secrets.AWS_REGION }}" ] || [ -z "${{ secrets.AWS_ACCOUNT_ID }}" ]; then
-            echo "Error: One of the required secrets is missing!"
-            exit 1
-          fi
-
-          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws configure set region ${{ secrets.AWS_REGION }}
-
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          python -m unittest tests/test_flask_app.py
 
       # -------------------------------
-      # Build Docker image
+      # Configure AWS Credentials
+      # -------------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # -------------------------------
+      # Login to Amazon ECR
+      # -------------------------------
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # -------------------------------
+      # Build Docker Image
       # -------------------------------
       - name: Build Docker image
         run: |
-          echo "Building Docker image..."
-          docker build -t capstone-app:latest .
+          docker build -t ${{ secrets.ECR_REPOSITORY }}:latest .
 
       # -------------------------------
-      # Verify Docker image exists
+      # Tag Docker Image
       # -------------------------------
-      - name: Verify Docker image
-        run: docker image inspect capstone-app:latest
-
-      # -------------------------------
-      # Tag Docker image for ECR
-      # -------------------------------
-      - name: Tag Docker image
+      
+      - name: Tag & Push Docker Image
         run: |
-          IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/capstone-app:latest"
+          # Define full ECR image URI
+          IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest"
+
+      
+
+
           echo "Tagging Docker image..."
-          docker tag capstone-app:latest $IMAGE_URI
+          docker tag ${{ secrets.ECR_REPOSITORY }}:latest $IMAGE_URI
 
-      # -------------------------------
-      # Push Docker image to ECR
-      # -------------------------------
-      - name: Push Docker image
-        run: |
-          IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/capstone-app:latest"
           echo "Pushing Docker image to ECR..."
           docker push $IMAGE_URI
-
 
 
 
