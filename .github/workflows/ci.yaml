@@ -42,21 +42,25 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r flask_app/requirements.txt
-          pip install dvc   # Ensure DVC is installed
+          pip install dvc
 
       # -------------------------------
-      # Run DVC Pipeline
+      # Run DVC Pipeline (FIXED)
       # -------------------------------
       - name: Run DVC pipeline
         env:
           CAPSTONE_TEST: ${{ secrets.CAPSTONE_TEST }}
+          PYTHONPATH: ${{ github.workspace }}
         run: |
+          echo "Running DVC with PYTHONPATH=$PYTHONPATH"
           dvc repro
 
       # -------------------------------
       # Run Model Tests
       # -------------------------------
       - name: Run model tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python -m unittest tests/test_model.py
 
@@ -64,6 +68,8 @@ jobs:
       # Promote Model
       # -------------------------------
       - name: Promote model to production
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python scripts/promote_model.py
 
@@ -71,6 +77,8 @@ jobs:
       # Run Flask App Tests
       # -------------------------------
       - name: Run Flask app tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python -m unittest tests/test_flask_app.py
 
@@ -111,6 +119,7 @@ jobs:
       - name: Push Docker image to Amazon ECR
         run: |
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest
+
 
 
 
