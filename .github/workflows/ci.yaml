@@ -102,17 +102,19 @@ jobs:
       # -------------------------------
       # Tag Docker Image
       # -------------------------------
-      - name: Tag Docker image
+      
+      - name: Tag & Push Docker Image
         run: |
-          docker tag ${{ secrets.ECR_REPOSITORY }}:latest \
-          ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest
+          # Define full ECR image URI
+          IMAGE_URI="${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest"
 
-      # -------------------------------
-      # Push Docker Image to ECR
-      # -------------------------------
-      - name: Push Docker image to Amazon ECR
-        run: |
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ secrets.ECR_REPOSITORY }}:latest
+          echo "Tagging Docker image..."
+          docker tag ${{ secrets.ECR_REPOSITORY }}:latest $IMAGE_URI
+
+          echo "Pushing Docker image to ECR..."
+          docker push $IMAGE_URI
+
+
 
 
       # - name: Set Up kubectl
