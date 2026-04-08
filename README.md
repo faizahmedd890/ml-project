@@ -3,8 +3,7 @@
 This project is an end-to-end Machine Learning application that predicts whether a movie review is **Positive** or **Negative** using Natural Language Processing (NLP).
 
 ## Project Overview
-
-The goal of this project is to automatically understand the sentiment of a user’s movie review. The model reads the review text and returns the prediction.
+Businesses struggle to analyze large volumes of customer reviews manually. To solve this, I built an end-to-end MLOps pipeline for sentiment analysis using TF-IDF and Logistic Regression. The model achieved 78% accuracy and 0.77 F1-score. I developed a FastAPI-based REST API, containerized it with Docker, and deployed it on AWS (EC2, ECR, EKS). The pipeline includes CI/CD automation using GitHub Actions, experiment tracking with MLflow, and monitoring with Prometheus & Grafana, enabling real-time and scalable predictions.
 
 ## Steps I Performed
 
